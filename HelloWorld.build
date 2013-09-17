@@ -1,0 +1,289 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<project name="proSoftOffice" default="compile" xmlns="http://nant.sourceforge.net/nightly/latest/nant.xsd">
+  <!--
+    =======================================================
+    EINSTELLUNGEN
+    =======================================================
+    -->
+  <!-- PROPERTIES -->
+  <!-- Globale Einstellung für msbuild verbosity = q[uiet], m[inimal], n[ormal], d[etailed], and diag[nostic] -->
+  <property name="build.verbosity" value="quiet" />
+  <!-- Globale Einstellung für NANT = true, false-->
+  <property name="debug" value="false"/>
+  <!-- Globale Einstellung für NANT verboisty = true, false-->
+  <property name="verbosity" value="false"/>
+  <!-- Verzeichnis in dem die Sourcen liegen -->
+  <property name="BuildDir" value="."/>
+  <!-- Ausgabeverzeichnis des Kompilats -->
+  <property name="output.dir" value="bin\build" />
+  <!-- Ausgabeverzeichnis für Reports (Tests, Metrics, usw.) -->
+  <property name="report.dir" value="${output.dir}\reports" />
+  <!-- Temporaeres Ausgabeverzeichnis für ci.continuous -->
+  <property name="tmpbuild.dir" value="c:\tmpbuild" />
+
+  <!-- Pfad zu MSBuild -->
+  <property name="MSBuildPath" value="C:\WINDOWS\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe"/>
+  <!-- Aktuelles Framework das verwendet wird -->
+  <property name="nant.settings.currentframework" value="net-4.0" />
+  <!-- Visual Studio Tasks -->
+  <!--<property name="vsnettasks.assembly" value="tools\nant\NAnt.VSNetTasks.dll" />-->
+  <!-- Nant Contrib -->
+  <!--<property name="nantcontrib.assembly" value="tools\nant\contrib\NAnt.Contrib.Tasks.dll" />-->
+  <!--
+    // ENDE EINSTELLUNGEN
+     -->
+
+  <!--
+    =======================================================
+    Hilfs Targets
+    =======================================================
+    -->
+  <!-- 
+    Löscht den Inhalt des Ausgabeverzeichnis
+    -->
+  <target name="clean" description="cleaning output directory">
+    <delete failonerror="false" verbose="${verbosity}">
+      <fileset basedir="bin">
+        <!-- alle dateien -->
+        <include name="*.*" />
+        <!-- alle verzeichnisse -->
+        <include name="**/**" />
+      </fileset>
+    </delete>
+  </target>
+
+  <!-- 
+    Initialisierung 
+    -->
+  <target name="init">
+    <!--<loadtasks assembly="${vsnettasks.assembly}" />
+    <loadtasks assembly="${nantcontrib.assembly}" />-->
+  </target>
+
+  <!--
+    =======================================================
+    Main Targets
+    =======================================================
+
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    Projekt Erstellung
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    -->
+
+  <!-- Default Target -->
+  <!-- Projekt Kompilieren auf Debug  -->
+  <target name="compile" depends="compile.debug" description="Kompiliert auf Debug">
+  </target>
+
+  <!-- Projekt Kompilieren auf Debug  -->
+  <target name="compile.debug" depends="init" failonerror="true" description="Kompiliert auf Debug">
+    <call target="clean" />
+
+    <echo message="Debug Build wird gestartet" />
+
+    <property name="build.configuration" value="Debug" />
+    <property name="build.project" value="HelloWorld.sln" />
+    <property name="build.info" value="debugbuild" />
+
+    <call target="msbuildtask" />
+
+    <echo message="Erstelle Ausgabeverzeichnise ${output.dir}" />
+    <mkdir dir="${output.dir}" />
+
+    <echo message="Kopiere Kompilat nach ${output.dir}" />
+    <copy todir="${output.dir}">
+      <fileset basedir="bin\Debug">
+        <!-- alle dateien -->
+        <include name="*.*" />
+        <!-- Alle Verzeichnisse -->
+        <include name="**/**" />
+      </fileset>
+    </copy>
+  </target>
+
+  <!-- Projekt Kompilieren auf release  -->
+  <target name="compile.release" depends="init" description="Kompiliert auf Release">
+    <call target="clean" />
+
+    <echo message="Release Build wird gestartet" />
+
+    <property name="build.configuration" value="Release" />
+    <property name="build.project" value="HelloWorld.sln" />
+    <property name="build.info" value="releasebuild" />
+    <call target="msbuildtask" />
+
+    <echo message="Erstelle Ausgabeverzeichnise ${output.dir}" />
+    <mkdir dir="${output.dir}" />
+
+    <echo message="Kopiere Kompilat nach ${output.dir}" />
+    <copy todir="${output.dir}">
+      <fileset basedir="bin\Release">
+        <!-- alle dateien -->
+        <include name="*.*" />
+        <!-- Alle Verzeichnisse -->
+        <include name="**/**" />
+      </fileset>
+    </copy>
+  </target>
+
+  <!--
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+     Unit Tests
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++    
+    -->
+  <target name="test.integration" description="Fuehrt Integration Tests aus">
+    <property name="integration.dir" value="${report.dir}\coverage-integrationtests" />
+    <mkdir dir="${integration.dir}" />
+
+    <property name="nunit.dir" value="${report.dir}\integrationtests" />
+    <mkdir dir="${nunit.dir}" />
+
+    <!-- Run Unittests in OpenCover -->
+    <exec program="OpenCover.Console.exe" basedir="packages\OpenCover.4.0.1128\" >
+      <arg value="-register:user" />
+      <arg value="-target:packages\NUnit.Runners.2.6.2\tools\nunit-console-x86.exe" />
+      <arg value="-targetargs:/noshadow /nologo /trace=Error /nodots ${output.dir}\Prosoft.Personnelmanager.Tests.dll /exclude:NotWorking /xml:${nunit.dir}\Prosoft.PersonnelManager.Tests.dll-results.xml" />
+      <arg value="-filter:+[*]*" />
+      <arg value="-output:${integration.dir}\coverage.xml" />
+      <arg value="-log:Error" />
+    </exec>
+
+    <nunit2report todir="${nunit.dir}">
+      <fileset basedir="${nunit.dir}">
+        <include name="*-results.xml" />
+      </fileset>
+    </nunit2report>
+
+    <!-- NUnit Coverage Report -->
+    <exec program="ReportGenerator.exe" basedir="packages\ReportGenerator.1.7.2.0\" workingdir="${integration.dir}">
+      <arg value="-reports:coverage.xml" />
+      <arg value="-targetdir:." />
+      <arg value="-filters:-Prosoft.PersonnelManager.Tests;-Prosoft.PersonnelManager.Resources;-Prosoft.PersonnelManager.Interfaces;-Prosoft.PersonnelManager.UI.*;-Microsoft*;+Prosoft.PersonnelManager.*" />
+      <arg value="-verbosity:Error" />
+    </exec>
+  </target>
+
+
+  <!--
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    metrics
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    -->
+
+  <!--
+    Führt die Codeanalyse-programme aus
+    -->
+  <target name="metrics.all" description="Fuehrt Codeanalyse durch - Results landen in Ordner test-reports">
+    <mkdir dir="${report.dir}" />
+    <call target="metrics.simian" />
+    <call target="metrics.stylecop" />
+  </target>
+  
+  <!--
+    Testet die Ausgabe mit StyleCop
+    -->
+  <target name="metrics.stylecop" description="Erstellt einen Stylecop Report aus einem Build">
+    <property name="stylecop.dir" value="${report.dir}\stylecop" />
+    <property name="violations.file" value="${stylecop.dir}\result.xml" />
+    <property name="log.file" value="${stylecop.dir}\log.txt" />
+    <echo message="Analyzing Code with StyleCop" />
+    <mkdir dir="${stylecop.dir}" />
+    <exec program="tools\metrics\stylecop\StyleCopConsole.exe" output="${log.file}" failonerror="true">
+      <arg line="-sc Settings.StyleCop" />
+      <arg line="-of ${violations.file}" />
+      <arg line="-tf tools\metrics\stylecop\StyleCopReport.xsl" />
+      <arg line="-sf PersonnelManager.sln" />
+    </exec>
+    <foreach item="Line" in="${log.file}" property="logline">
+      <if test="${string::contains(logline,'violations encountered')}">
+        <echo message="${logline}" />
+      </if>
+    </foreach>
+    <echo message="No violations encountered" />
+  </target>
+
+  <!--
+    Deploy der metrics-Reports"
+     -->
+  <target name="metrics.deploy">
+    <property name="deployto" value="${deploy.reports.dir}\${version}" />
+    <mkdir dir="${deployto}" if="${not directory::exists(deployto)}" />
+    <copy todir="${deployto}">
+      <fileset basedir="tools\metrics\output\">
+        <!-- alle dateien -->
+        <include name="*.html" />
+      </fileset>
+    </copy>
+  </target>
+
+  <!--
+    =======================================================
+    Continuous Integration Targets
+      - Werden vom Buildserver ausgeführt
+      - Laufen nicht auf dem Entwickler PC
+      - Nutzen nur die Haupttargets
+    =======================================================
+    -->
+
+  <!-- 
+      ci.continuous   Build
+      - Wird ausgeführt wenn etwas zum Gerrit gepusht wird
+      - Build auf Release
+      - Führt Integrationstests aus
+    -->
+  <target name="ci.verify" depends="init">
+    <!-- ci.continuous kompilieren-->
+    <call target="compile.release"/>
+    <!-- Alle Code Metriken erfassen -->
+    <call target="metrics.all"/>
+    <!-- Integrationstests -->
+    <call target="test.integration" />
+  </target>
+
+  <!--
+    =======================================================
+     HilfsTargets
+    =======================================================
+    -->
+  <target name="updatenugetpackages">
+    <setenv>
+      <variable name="EnableNuGetPackageRestore" value="true" />
+    </setenv>
+    <fileset id="find.set">
+      <include name="**\packages.config" />
+    </fileset>
+    <foreach item="File" property="filename">
+      <in>
+        <items refid="find.set" />
+      </in>
+      <do>
+        <echo message="updating packages from file ${filename}" />
+        <exec program=".nuget/NuGet.exe">
+          <arg line="install ${filename} -o packages"/>
+        </exec>
+
+      </do>
+    </foreach>
+  </target>
+
+  <!--
+    Erzeugt eine Solution mit Hilfe von msBuild
+    -->
+  <target name="msbuildtask">
+    <!-- Update Nuget Packages -->
+    <call target="updatenugetpackages" />
+
+    <!-- Standard Build -->
+    <exec program="${MSBuildPath}">
+      <arg line='"${build.project}"' />
+      <arg line="/p:Configuration=${build.configuration} /p:RunCodeAnalysis=true" />
+      <arg value="/target:Build" />
+      <arg value="/verbosity:${build.verbosity}" />
+      <arg value="/maxcpucount" />
+      <arg value="/nologo" />
+      <arg value="/p:PostSharpHost=Native" />
+      <!-- Fuer Postsharp laut Karl [PipeServer,Managed,Native]- http://doc.sharpcrafters.com/postsharp-2.0/Default.aspx##PostSharp-2.0.chm/html/541CB3E3-9C3B-4E6F-B52F-FA7DC01F6EF9.htm -->
+    </exec>
+  </target>
+
+</project>
